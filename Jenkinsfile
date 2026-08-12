@@ -50,7 +50,10 @@ pipeline {
             steps {
                 sh '''
                     cd terraform
-                    terraform plan
+                    terraform plan \
+                        -var="aws_region=${AWS_REGION}" \
+                        -var="instance_type=t3.small" \
+                        -var="s3_bucket_name=my-devops-website-2026-2004"
                 '''
             }
         }
