@@ -1,18 +1,3 @@
-output "jenkins_instance_id" {
-  description = "Jenkins EC2 instance ID"
-  value       = aws_instance.jenkins.id
-}
-
-output "jenkins_public_ip" {
-  description = "Jenkins public IP"
-  value       = aws_instance.jenkins.public_ip
-}
-
-output "jenkins_url" {
-  description = "Jenkins URL"
-  value       = "http://${aws_instance.jenkins.public_ip}:8080"
-}
-
 output "s3_bucket_name" {
   description = "Website S3 bucket"
   value       = aws_s3_bucket.website.bucket
