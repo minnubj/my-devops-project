@@ -28,13 +28,15 @@ pipeline {
             }
         }
 
-        stage('Terraform Init') {
-            steps {
-                sh '''
-                    cd terraform
-                    terraform init
+       stage('Terraform Plan') {
+           steps {
+               sh '''
+                   cd terraform
+                   terraform plan \
+                      -var="aws_region=${AWS_REGION}" \
+                      -var="s3_bucket_name=my-devops-website-2026-2004"
                 '''
-            }
+             }
         }
 
         stage('Terraform Validate') {
