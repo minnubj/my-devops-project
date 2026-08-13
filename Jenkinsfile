@@ -6,6 +6,7 @@ pipeline {
         AWS_REGION = 'eu-west-1'
         ECR_REPOSITORY = 'my-devops-app'
         IMAGE_TAG = "${BUILD_NUMBER}"
+        S3_BUCKET = 'my-devops-website-2026-2004'
     }
 
     stages {
@@ -19,24 +20,27 @@ pipeline {
         stage('Check Tools') {
             steps {
                 sh '''
-                    echo "Checking tools..."
+                    echo "===== Checking Tools ====="
 
                     java -version
                     docker --version
                     aws --version
+                    terraform version
+                    git --version
+
+                    echo "===== AWS Identity ====="
+                    aws sts get-caller-identity
                 '''
             }
         }
 
-       stage('Terraform Plan') {
-           steps {
-               sh '''
-                   cd terraform
-                   terraform plan \
-                      -var="aws_region=${AWS_REGION}" \
-                      -var="s3_bucket_name=my-devops-website-2026-2004"
+        stage('Terraform Init') {
+            steps {
+                sh '''
+                    cd terraform
+                    terraform init
                 '''
-             }
+            }
         }
 
         stage('Terraform Validate') {
@@ -52,10 +56,10 @@ pipeline {
             steps {
                 sh '''
                     cd terraform
+
                     terraform plan \
                         -var="aws_region=${AWS_REGION}" \
-                        -var="instance_type=t3.small" \
-                        -var="s3_bucket_name=my-devops-website-2026-2004"
+                        -var="s3_bucket_name=${S3_BUCKET}"
                 '''
             }
         }
@@ -63,9 +67,14 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 sh '''
+                    echo "===== Building Docker Image ====="
+
                     docker build \
-                    -f docker/Dockerfile \
-                    -t ${ECR_REPOSITORY}:${IMAGE_TAG} .
+                        -f docker/Dockerfile \
+                        -t ${ECR_REPOSITORY}:${IMAGE_TAG} .
+
+                    echo "===== Docker Images ====="
+                    docker images | head
                 '''
             }
         }
@@ -73,11 +82,15 @@ pipeline {
         stage('Login to ECR') {
             steps {
                 sh '''
+                    echo "===== Login to Amazon ECR ====="
+
                     ECR_URL=$(aws ecr describe-repositories \
                         --repository-names ${ECR_REPOSITORY} \
                         --region ${AWS_REGION} \
                         --query 'repositories[0].repositoryUri' \
                         --output text)
+
+                    echo "ECR Repository: ${ECR_URL}"
 
                     aws ecr get-login-password \
                         --region ${AWS_REGION} \
@@ -91,6 +104,8 @@ pipeline {
         stage('Push Docker Image') {
             steps {
                 sh '''
+                    echo "===== Pushing Docker Image ====="
+
                     ECR_URL=$(aws ecr describe-repositories \
                         --repository-names ${ECR_REPOSITORY} \
                         --region ${AWS_REGION} \
@@ -103,6 +118,9 @@ pipeline {
 
                     docker push \
                         ${ECR_URL}:${IMAGE_TAG}
+
+                    echo "===== Image Pushed Successfully ====="
+                    echo "${ECR_URL}:${IMAGE_TAG}"
                 '''
             }
         }
@@ -110,14 +128,38 @@ pipeline {
         stage('Deploy Website to S3') {
             steps {
                 sh '''
-                    BUCKET=$(cd terraform && terraform output -raw s3_bucket_name)
+                    echo "===== Deploying Website to S3 ====="
 
                     aws s3 cp \
                         website/index.html \
-                        s3://${BUCKET}/index.html \
+                        s3://${S3_BUCKET}/index.html \
+                        --region ${AWS_REGION}
+
+                    echo "===== S3 Contents ====="
+
+                    aws s3 ls \
+                        s3://${S3_BUCKET}/ \
                         --region ${AWS_REGION}
                 '''
             }
+        }
+    }
+
+    post {
+        success {
+            echo '======================================'
+            echo 'PIPELINE COMPLETED SUCCESSFULLY!'
+            echo '======================================'
+            echo "S3 Bucket: ${S3_BUCKET}"
+            echo "ECR Repository: ${ECR_REPOSITORY}"
+            echo "Docker Image Tag: ${IMAGE_TAG}"
+        }
+
+        failure {
+            echo '======================================'
+            echo 'PIPELINE FAILED'
+            echo 'Check the failed stage above.'
+            echo '======================================'
         }
     }
 }
